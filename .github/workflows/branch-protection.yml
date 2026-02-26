@@ -1,0 +1,96 @@
+name: Configure Branch Protection
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - ".github/workflows/branch-protection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  administration: write
+
+jobs:
+  protect-master:
+    name: Apply Master Branch Protection Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set branch protection rules for master
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = 'master';
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            await github.rest.repos.updateBranchProtection({
+              owner,
+              repo,
+              branch,
+              required_status_checks: {
+                strict: true,
+                contexts: [
+                  'Lint & Type Check',
+                  'Unit & Integration Tests',
+                  'Coverage Gate (≥ 95%)',
+                  'E2E Tests (Playwright)',
+                  'Build',
+                ],
+              },
+              enforce_admins: false,
+              required_pull_request_reviews: {
+                dismiss_stale_reviews: true,
+                require_code_owner_reviews: false,
+                required_approving_review_count: 1,
+              },
+              restrictions: null,
+              allow_force_pushes: false,
+              allow_deletions: false,
+              block_creations: false,
+              required_conversation_resolution: true,
+            });
+
+            core.info(`Branch protection applied to ${owner}/${repo}:${branch}`);
+
+      - name: Set branch protection rules for develop
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = 'develop';
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            try {
+              await github.rest.repos.updateBranchProtection({
+                owner,
+                repo,
+                branch,
+                required_status_checks: {
+                  strict: true,
+                  contexts: [
+                    'Lint & Type Check',
+                    'Unit & Integration Tests',
+                    'Coverage Gate (≥ 95%)',
+                    'Build',
+                  ],
+                },
+                enforce_admins: false,
+                required_pull_request_reviews: {
+                  dismiss_stale_reviews: true,
+                  require_code_owner_reviews: false,
+                  required_approving_review_count: 1,
+                },
+                restrictions: null,
+                allow_force_pushes: false,
+                allow_deletions: false,
+                required_conversation_resolution: true,
+              });
+
+              core.info(`Branch protection applied to ${owner}/${repo}:${branch}`);
+            } catch (err) {
+              // develop branch may not exist yet; log and continue
+              core.warning(`Could not protect ${branch}: ${err.message}`);
+            }
