@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getRecommendations } from "@/lib/deezer";
 import { parseJsonField } from "@/lib/utils";
 import { PLANS } from "@/lib/stripe";
+import { scoreAndRankTracks } from "@/lib/recommendation-engine";
 
 export async function GET(req: NextRequest) {
   try {
@@ -65,20 +66,44 @@ export async function GET(req: NextRequest) {
       limit,
     });
 
+    // Collect artist IDs from recently liked recommendations for scoring
+    const likedRecs = await prisma.recommendation.findMany({
+      where: { userId: session.user.id, liked: true },
+      select: { trackData: true },
+      take: 50,
+      orderBy: { createdAt: "desc" },
+    });
+    const preferredArtistIds = likedRecs.flatMap((r) => {
+      try {
+        const td = JSON.parse(r.trackData) as { artist?: { id?: number } };
+        return td.artist?.id != null ? [td.artist.id] : [];
+      } catch {
+        return [];
+      }
+    });
+
+    // Score and rank the fetched tracks
+    const scored = scoreAndRankTracks(tracks, {
+      genres,
+      bpmRange: bpm.min > 0 ? bpm : undefined,
+      preferredArtistIds,
+    });
+
     // Save recommendations to database
-    if (tracks.length > 0) {
-      for (const track of tracks) {
+    if (scored.length > 0) {
+      for (const { track, score } of scored) {
         await prisma.recommendation.create({
           data: {
             userId: session.user.id,
             trackData: JSON.stringify(track),
-            score: Math.random(),
+            score,
           },
         });
       }
     }
 
-    return NextResponse.json({ data: tracks, total: tracks.length });
+    const rankedTracks = scored.map(({ track }) => track);
+    return NextResponse.json({ data: rankedTracks, total: rankedTracks.length });
   } catch (error) {
     console.error("[GET_RECOMMENDATIONS]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

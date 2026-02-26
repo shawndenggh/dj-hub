@@ -5,18 +5,25 @@ import { PLANS } from "@/lib/stripe";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatsCard } from "@/components/stats-card";
 import Link from "next/link";
-import { Radio, Music, Zap, TrendingUp } from "lucide-react";
+import { Radio, Music, TrendingUp, BarChart3, Star } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const session = await getAuthSession();
 
-  const [subscription, channelCount, recommendationCount] = await Promise.all([
+  const [subscription, channelCount, recommendationCount, monthlyRecommendationCount] = await Promise.all([
     prisma.subscription.findUnique({ where: { userId: session!.user.id } }),
     prisma.channel.count({ where: { userId: session!.user.id } }),
     prisma.recommendation.count({ where: { userId: session!.user.id } }),
+    prisma.recommendation.count({
+      where: {
+        userId: session!.user.id,
+        createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+      },
+    }),
   ]);
 
   const plan = (subscription?.plan ?? "FREE") as keyof typeof PLANS;
@@ -38,47 +45,70 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Channels</CardTitle>
-            <Radio className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{channelCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {planDetails.limits.channels === -1
-                ? "Unlimited channels"
-                : `${channelCount} / ${planDetails.limits.channels} channels`}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recommendations</CardTitle>
-            <Music className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{recommendationCount}</div>
-            <p className="text-xs text-muted-foreground">Total tracks discovered</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Current Plan</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{planDetails.name}</div>
-            <p className="text-xs text-muted-foreground">
-              {planDetails.limits.recommendations === -1
-                ? "Unlimited recommendations"
-                : `${planDetails.limits.recommendations}/mo recommendations`}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatsCard
+          title="My Channels"
+          value={channelCount}
+          description={
+            planDetails.limits.channels === -1
+              ? "Unlimited channels"
+              : `${channelCount} / ${planDetails.limits.channels} used`
+          }
+          progress={
+            planDetails.limits.channels === -1
+              ? undefined
+              : Math.min(100, Math.round((channelCount / planDetails.limits.channels) * 100))
+          }
+          progressLabel={
+            planDetails.limits.channels !== -1
+              ? `${planDetails.limits.channels - channelCount} remaining`
+              : undefined
+          }
+          icon={<Radio className="h-4 w-4" />}
+        />
+        <StatsCard
+          title="This Month"
+          value={monthlyRecommendationCount}
+          description={
+            planDetails.limits.recommendations === -1
+              ? "Unlimited recommendations"
+              : `of ${planDetails.limits.recommendations}/mo`
+          }
+          progress={
+            planDetails.limits.recommendations === -1
+              ? undefined
+              : Math.min(
+                  100,
+                  Math.round(
+                    (monthlyRecommendationCount / planDetails.limits.recommendations) * 100
+                  )
+                )
+          }
+          progressLabel={
+            planDetails.limits.recommendations !== -1
+              ? `${Math.max(0, planDetails.limits.recommendations - monthlyRecommendationCount)} quota remaining`
+              : undefined
+          }
+          icon={<BarChart3 className="h-4 w-4" />}
+        />
+        <StatsCard
+          title="Total Discoveries"
+          value={recommendationCount}
+          description="All-time tracks discovered"
+          icon={<Music className="h-4 w-4" />}
+        />
+        <StatsCard
+          title="Current Plan"
+          value={planDetails.name}
+          description={
+            plan === "FREE"
+              ? "Upgrade for more features"
+              : plan === "PRO"
+                ? "Pro features unlocked"
+                : "Full enterprise access"
+          }
+          icon={<Star className="h-4 w-4" />}
+        />
       </div>
 
       {/* Quick Actions */}

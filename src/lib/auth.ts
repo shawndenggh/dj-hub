@@ -81,20 +81,22 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async signIn({ user, account }) {
-      // Auto-create subscription for new OAuth users
+      // Auto-create subscription and preference for new OAuth users
       if (account?.provider === "github" && user.id) {
-        const existing = await prisma.subscription.findUnique({
-          where: { userId: user.id },
-        });
-        if (!existing) {
-          await prisma.subscription.create({
-            data: {
-              userId: user.id,
-              plan: "FREE",
-              status: "active",
-            },
-          });
-        }
+        const [existingSub, existingPref] = await Promise.all([
+          prisma.subscription.findUnique({ where: { userId: user.id } }),
+          prisma.preference.findUnique({ where: { userId: user.id } }),
+        ]);
+        await Promise.all([
+          !existingSub
+            ? prisma.subscription.create({
+                data: { userId: user.id, plan: "FREE", status: "active" },
+              })
+            : Promise.resolve(),
+          !existingPref
+            ? prisma.preference.create({ data: { userId: user.id } })
+            : Promise.resolve(),
+        ]);
       }
       return true;
     },
