@@ -32,7 +32,7 @@ A full-stack SaaS platform for DJs to discover music, manage channels, and get A
 ## 📁 Project Structure
 
 ```
-dj-hub-nextjs/
+dj-hub/
 ├── prisma/
 │   ├── schema.prisma          # Database schema
 │   └── seed.ts                # Database seeding
@@ -90,7 +90,7 @@ dj-hub-nextjs/
 
 ```bash
 git clone https://github.com/your-org/dj-hub.git
-cd dj-hub-nextjs
+cd dj-hub
 npm install
 ```
 
